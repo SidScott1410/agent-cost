@@ -95,13 +95,14 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"aggregate": agg, "sessions": [r.totals() for r in runs]}, indent=2))
         return 0
 
-    print(f"{agg['sessions']} sessions, {agg['calls_total']:,} calls, {agg['tokens_total']:,} tokens")
+    empty = f" ({agg['sessions_empty']} empty skipped)" if agg.get("sessions_empty") else ""
+    print(f"{agg['sessions']} sessions{empty}, {agg['calls_total']:,} calls, {agg['tokens_total']:,} tokens")
     print(f"cost  total ${agg['cost_usd_total']:.2f}   p50 ${agg['cost_usd_p50']:.2f}   p90 ${agg['cost_usd_p90']:.2f}   max ${agg['cost_usd_max']:.2f}")
     print(f"waste p50 {agg['waste_share_p50']*100:.1f}%   p90 {agg['waste_share_p90']*100:.1f}%   (retried tool calls / all tokens)")
     if agg["unpriced_models"]:
         print(f"unpriced models: {', '.join(agg['unpriced_models'])}; costs above exclude them")
     print()
-    top = sorted(runs, key=lambda r: r.totals()["cost_usd"], reverse=True)[: a.top]
+    top = sorted((r for r in runs if r.totals()["calls"] > 0), key=lambda r: r.totals()["cost_usd"], reverse=True)[: a.top]
     print(f"top {len(top)} sessions by cost:")
     for r in top:
         t = r.totals()

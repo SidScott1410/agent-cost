@@ -125,7 +125,8 @@ def find_sessions(root: Path = DEFAULT_ROOT, project: str | None = None) -> list
 
 def aggregate(runs: list[Run]) -> dict:
     """Totals across sessions plus the distribution a post needs."""
-    per = [r.totals() for r in runs]
+    # a session file with no API calls (login, /help, an aborted start) is not a run
+    per = [t for t in (r.totals() for r in runs) if t["calls"] > 0]
     costs = sorted(t["cost_usd"] for t in per)
     waste = sorted(t["waste_share"] for t in per)
 
@@ -137,6 +138,7 @@ def aggregate(runs: list[Run]) -> dict:
 
     return {
         "sessions": len(per),
+        "sessions_empty": len(runs) - len(per),
         "cost_usd_total": round(sum(costs), 4),
         "cost_usd_p50": pct(costs, 0.5),
         "cost_usd_p90": pct(costs, 0.9),

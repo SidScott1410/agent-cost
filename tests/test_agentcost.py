@@ -221,3 +221,14 @@ def test_lookup_uses_tokenprice_record_shape(monkeypatch):
 
     fake.get = lambda key: (_ for _ in ()).throw(RuntimeError("feed down"))
     assert prices.lookup("llama-3-1-8b-instruct") is None  # feed failure degrades to unpriced, not a crash
+
+
+def test_aggregate_skips_empty_sessions():
+    from agentcost.claude_code import aggregate
+    from agentcost.core import Run, Step
+    full = Run(name="a", retry_by_name=False)
+    full.root.children.append(Step("Bash", model="m", input_tokens=100, output_tokens=10))
+    empty = Run(name="login", retry_by_name=False)
+    agg = aggregate([full, empty])
+    assert agg["sessions"] == 1 and agg["sessions_empty"] == 1
+    assert agg["cost_usd_p50"] == full.totals()["cost_usd"]
