@@ -194,3 +194,30 @@ def test_compare_cli(tmp_path, capsys):
     assert main(["compare", str(tmp_path / "a.json"), str(tmp_path / "b.json")]) == 0
     out = capsys.readouterr().out
     assert "delta" in out and "+50%" in out
+
+
+def test_lookup_uses_tokenprice_record_shape(monkeypatch):
+    """tokenprice.Record has read_at and provider, not as_of; lookup must map them (found on a real machine)."""
+    import sys
+    import types
+
+    from agentcost import prices
+
+    class Rec:
+        input_per_m = 0.05
+        output_per_m = 0.08
+        cached_input_per_m = None
+        source = "https://openrouter.ai/api/v1/models/x/endpoints"
+        read_at = "2026-11-13T00:00:00Z"
+        provider = "deepinfra"
+
+    fake = types.ModuleType("tokenprice")
+    fake.get = lambda key: Rec() if key == "llama-3-1-8b-instruct" else None
+    monkeypatch.setitem(sys.modules, "tokenprice", fake)
+    p = prices.lookup("meta-llama/llama-3.1-8b-instruct")
+    assert p is not None and p.input_per_m == 0.05 and p.as_of == "2026-11-13T00:00:00Z"
+    assert p.source.startswith("tokenprice:deepinfra:")
+    assert prices.lookup("nope") is None
+
+    fake.get = lambda key: (_ for _ in ()).throw(RuntimeError("feed down"))
+    assert prices.lookup("llama-3-1-8b-instruct") is None  # feed failure degrades to unpriced, not a crash

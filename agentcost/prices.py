@@ -43,12 +43,17 @@ _DATE_SUFFIX = re.compile(r"[-_]?\d{8}$|[-_]?\d{4}-\d{2}-\d{2}$")
 
 
 def normalize(model: str) -> str:
-    """'anthropic/claude-sonnet-4-5-20250929' -> 'claude-sonnet-4-5'."""
+    """'anthropic/claude-sonnet-4-5-20250929' -> 'claude-sonnet-4-5'.
+
+    Same rule as tokenprice.normalize so the two packages agree on keys:
+    provider prefix, date suffix and variant tags stripped; '.' and '_' become '-'.
+    """
     m = model.strip().lower()
     if "/" in m:
         m = m.rsplit("/", 1)[1]
+    m = m.split(":", 1)[0]
     m = _DATE_SUFFIX.sub("", m)
-    return m
+    return m.replace("_", "-").replace(".", "-")
 
 
 def lookup(model: str) -> Price | None:
@@ -59,7 +64,17 @@ def lookup(model: str) -> Price | None:
     except ImportError:
         tokenprice = None
     if tokenprice is not None:
-        p = tokenprice.get(key)
+        try:
+            p = tokenprice.get(key)
+        except Exception:  # noqa: BLE001  a broken or offline feed must never take the costing down
+            p = None
         if p is not None:
-            return Price(p.input_per_m, p.output_per_m, p.cached_input_per_m, p.source, p.as_of)
+            # tokenprice.Record fields: input_per_m, output_per_m, cached_input_per_m, source, read_at
+            return Price(
+                input_per_m=float(p.input_per_m),
+                output_per_m=float(p.output_per_m),
+                cached_input_per_m=getattr(p, "cached_input_per_m", None),
+                source=f"tokenprice:{getattr(p, 'provider', '')}:{getattr(p, 'source', '')}",
+                as_of=getattr(p, "read_at", None) or getattr(p, "as_of", ""),
+            )
     return TABLE.get(key)
