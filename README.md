@@ -93,7 +93,38 @@ feed if it is installed (`pip install agentcost[live]`). An unknown model is
 reported as **unpriced**, never estimated. Pull requests adding a price need
 the vendor page URL and the date you read it.
 
-## Example tree
+## A real session
+
+One Claude Code run, asked to run the tests, then `cat /nonexistent/file`, then the tests
+again. Parsed from `~/.claude/projects`, priced from the live [tokenprice](https://github.com/SidScott1410/tokenprice) feed:
+
+```
+$ agentcost session ~/.claude/projects/*/d00d1fa7-*.jsonl
+d00d1fa7-5889-4c7f-b398-a4f5b2de8e6e: 5 calls, 124,455 tokens, $0.1172, waste 21.2% of tokens, 8.0% of cost
+  served        4 calls       98,008 tok  $0.1079
+  retried       1 calls       26,447 tok  $0.0093
+
+├─ Bash claude-opus-5-5  18,202 tok  1711 ms  $0.0381
+├─ Bash claude-opus-5-5  25,995 tok  1717 ms  $0.0450
+├─ Bash claude-opus-5-5  26,447 tok  1921 ms  $0.0093 [retried]
+├─ Bash claude-opus-5-5  26,602 tok  1744 ms  $0.0083
+└─ respond claude-opus-5-5  27,209 tok  5415 ms  $0.0165
+```
+
+Two things to read off it. The failed turn is 21% of the tokens but 8% of the cost: by the
+third call nearly everything in the context is a cache read at a tenth of the input rate,
+so token-share overstates what a retry costs once caching is on. And the per-call cost falls
+from $0.045 to $0.008 across the run for the same reason; the expensive calls in an agent
+loop are the early ones that build the cache, not the late ones that reuse it.
+
+```
+$ agentcost claude --last 1d
+1 sessions (1 empty skipped), 5 calls, 124,455 tokens
+cost  total $0.12   p50 $0.12   p90 $0.12   max $0.12
+waste p50 21.2%   p90 21.2%   (retried tool calls / all tokens)
+```
+
+## Example tree (synthetic, with an SLO)
 
 ```
 plan-and-write: 4 calls, 3,950 tokens, $0.0047, waste 34.2%
