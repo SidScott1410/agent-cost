@@ -1,20 +1,26 @@
-# agentcost
+# agent-cost
 
-**What did your agent run cost, and how much of it was waste.**
+**ccusage tells you what your agent spent. agent-cost tells you what it spent on steps that did not count, in dollars, not tokens.**
 
-```
-$ agentcost claude --last 7d
-41 sessions, 1,872 calls, 6,214,330 tokens
-cost  total $31.18   p50 $0.41   p90 $2.07   max $6.90
-waste p50 18.4%   p90 41.0%   (retried tool calls / all tokens)
-```
+Every observability tool reports spend per call. None of them reports *outcome-classified* spend: the share that went to steps that were retried, discarded, late against an SLO, or errored. Langfuse's own cost guide puts the gap plainly: if retries do not show up as separate observations, you cannot see what they cost. This is the tool for that one column.
 
-No server. No account. No telemetry. Reads the logs that are already on your
-machine, or wraps the client you already use.
+![tokens vs dollars by outcome](docs/waste.svg)
+
+The two bars are the finding. In the one real session below, the failed turn is **21% of the tokens but 8% of the cost**, because by then nearly every token in the context is a cache read at a tenth of the input rate. Waste measured in tokens overstates the bill by 2 to 3x once prompt caching is on, which is to say every token-based waste estimate you have read is wrong in the same direction.
 
 ```
-pip install agentcost
+pip install git+https://github.com/SidScott1410/agent-cost
+agentcost claude --last 7d                 # your Claude Code sessions, waste in tokens and dollars
+agentcost claude --last 7d --svg waste.svg # the chart above, from your own runs
+agentcost claude --ccusage-json cc.json    # reconcile spend against `ccusage session --json`
 ```
+
+Prices come from the live [tokenprice](https://github.com/SidScott1410/tokenprice) feed when installed (`pip install git+https://github.com/SidScott1410/tokenprice`), with a static table as fallback. Unpriced models are listed, never guessed.
+
+### Not this
+
+- Not a replacement for [ccusage](https://github.com/ryoppippi/ccusage): it covers 15 agent CLIs and reports spend by day; use it for that, and pipe its JSON here for the waste column.
+- Not an observability platform: no dashboard, no server. Langfuse, LangSmith and AgentOps instrument your app; this classifies what they do not.
 
 ## Three ways in
 

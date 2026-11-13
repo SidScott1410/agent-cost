@@ -232,3 +232,56 @@ def test_aggregate_skips_empty_sessions():
     agg = aggregate([full, empty])
     assert agg["sessions"] == 1 and agg["sessions_empty"] == 1
     assert agg["cost_usd_p50"] == full.totals()["cost_usd"]
+
+
+def _session_like_real(tmp_path, sid="d00d1fa7"):
+    """Five Opus turns; the third tool_result is an error; later turns are mostly cache reads."""
+    import json
+    lines = [{"type": "user", "timestamp": "2026-11-13T02:00:00Z", "message": {"content": "go"}}]
+    usages = [(18000, 200, 0, 0), (2000, 300, 0, 23000), (1500, 400, 0, 24500), (1200, 350, 0, 25000), (900, 800, 0, 25500)]
+    for i, (inp, out, cw, cr) in enumerate(usages):
+        lines.append({"type": "assistant", "timestamp": f"2026-11-13T02:00:{i*2+1:02d}Z",
+                      "message": {"id": f"m{i}", "model": "claude-opus-5-5",
+                                  "usage": {"input_tokens": inp, "output_tokens": out,
+                                            "cache_creation_input_tokens": cw, "cache_read_input_tokens": cr},
+                                  "content": [{"type": "tool_use", "name": "Bash"}] if i < 4 else [{"type": "text", "text": "done"}]}})
+        if i < 4:
+            lines.append({"type": "user", "timestamp": f"2026-11-13T02:00:{i*2+2:02d}Z",
+                          "message": {"content": [{"type": "tool_result", "is_error": i == 2}]}})
+    p = tmp_path / f"{sid}.jsonl"
+    p.write_text("\n".join(json.dumps(x) for x in lines))
+    return p
+
+
+def test_waste_chart_and_cost_vs_token_gap(tmp_path):
+    from agentcost.chart import waste_chart
+    from agentcost.claude_code import parse_session
+    from agentcost.prices import TABLE, Price
+    TABLE["claude-opus-5-5"] = Price(15.0, 75.0, 1.5)
+    try:
+        run = parse_session(_session_like_real(tmp_path))
+        t = run.totals()
+        assert t["waste_share"] > 0.15 and t["waste_share_cost"] < t["waste_share"] / 1.3  # the thesis: cost share < token share
+        svg = waste_chart([run])
+        assert svg.startswith("<svg") and "retried" in svg and "waste" in svg
+        assert waste_chart([]).count("no sessions") == 1
+    finally:
+        del TABLE["claude-opus-5-5"]
+
+
+def test_reconcile_against_ccusage(tmp_path, capsys):
+    import json
+
+    from agentcost.claude_code import parse_session
+    from agentcost.cli import _reconcile
+    from agentcost.prices import TABLE, Price
+    TABLE["claude-opus-5-5"] = Price(15.0, 75.0, 1.5)
+    try:
+        run = parse_session(_session_like_real(tmp_path))
+        cc = tmp_path / "cc.json"
+        cc.write_text(json.dumps({"sessions": [{"sessionId": "d00d1fa7", "totalCost": run.totals()["cost_usd"] * 1.05}]}))
+        _reconcile([run], cc)
+        out = capsys.readouterr().out
+        assert "reconcile vs ccusage" in out and "-5%" in out
+    finally:
+        del TABLE["claude-opus-5-5"]

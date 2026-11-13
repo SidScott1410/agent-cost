@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="164" viewBox="0 0 920 164" font-family="system-ui,sans-serif" font-size="12" fill="#222">
+<rect width="920" height="164" fill="#fff" rx="6"/>
+<text x="150" y="24" font-size="15" font-weight="600">Where the spend went: tokens vs dollars, by outcome</text>
+<text x="150" y="42" opacity=".65">Top bar = share of tokens. Bottom bar = share of dollars. Late retries are mostly cache reads, so the bars differ.</text>
+<rect x="150" y="50" width="10" height="10" fill="#2f6fdd"/>
+<text x="164" y="59">served</text>
+<rect x="216" y="50" width="10" height="10" fill="#d6453b"/>
+<text x="230" y="59">retried</text>
+<rect x="289" y="50" width="10" height="10" fill="#e0a106"/>
+<text x="303" y="59">discarded</text>
+<rect x="376" y="50" width="10" height="10" fill="#7c3aed"/>
+<text x="390" y="59">late</text>
+<rect x="428" y="50" width="10" height="10" fill="#6b7280"/>
+<text x="442" y="59">error</text>
+<text x="140" y="100" text-anchor="end" font-weight="600">d00d1fa7-5889-4c7f</text>
+<text x="140" y="120" text-anchor="end" opacity=".6">$0.117</text>
+<rect x="150.0" y="80" width="511.9" height="18" fill="#2f6fdd" fill-opacity="0.55"/>
+<rect x="661.9" y="80" width="138.1" height="18" fill="#d6453b" fill-opacity="0.55"/>
+<rect x="150.0" y="102" width="598.3" height="18" fill="#2f6fdd" fill-opacity="0.9"/>
+<rect x="748.3" y="102" width="51.7" height="18" fill="#d6453b" fill-opacity="0.9"/>
+<text x="808" y="96" opacity=".7">waste 21% tok</text>
+<text x="808" y="116" opacity=".7">waste 8% $</text>
+</svg>

@@ -27,6 +27,34 @@ def _since(spec: str | None) -> float | None:
     return time.time() - n * {"h": 3600, "d": 86400, "w": 604800}[unit]
 
 
+def _reconcile(runs, path: Path) -> None:
+    """Spend per session, ours vs ccusage's, so a ccusage user can trust the waste column.
+
+    Reads the JSON from `ccusage session --json` (sessions[].sessionId, totalCost).
+    Differences come from price tables and cache-write rates, not from token counts;
+    a gap over ~10% means one of the two price sources is stale.
+    """
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        print(f"could not read ccusage json: {e}", file=sys.stderr)
+        return
+    theirs = {s.get("sessionId"): s for s in data.get("sessions", []) if s.get("sessionId")}
+    print(f"\nreconcile vs ccusage ({len(theirs)} sessions in their file):")
+    print(f"  {'session':<38}{'agentcost $':>12}{'ccusage $':>12}{'delta':>9}  waste$")
+    for r in runs:
+        t = r.totals()
+        if t["calls"] == 0:
+            continue
+        o = theirs.get(t["run"])
+        if not o:
+            continue
+        mine, th = t["cost_usd"], float(o.get("totalCost") or 0)
+        delta = f"{(mine - th) / th * 100:+.0f}%" if th else "n/a"
+        wc = f"{(t.get('waste_share_cost') or 0) * 100:.0f}%"
+        print(f"  {t['run'][:36]:<38}{mine:>12.4f}{th:>12.4f}{delta:>9}  {wc}")
+
+
 def _compare(pa: Path, pb: Path) -> int:
     """Side-by-side totals. The number people act on is the delta column."""
     ta = json.loads(pa.read_text())["totals"]
@@ -62,6 +90,9 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--last", default=None, help="24h, 7d, 2w")
     c.add_argument("--json", action="store_true")
     c.add_argument("--top", type=int, default=5, help="show the N most expensive sessions")
+    c.add_argument("--svg", type=Path, default=None, help="write a tokens-vs-dollars-by-outcome chart")
+    c.add_argument("--ccusage-json", type=Path, default=None,
+                   help="reconcile spend against `ccusage session --json` output")
 
     s = sub.add_parser("session", help="full cost tree for one session file")
     s.add_argument("path", type=Path)
@@ -102,6 +133,13 @@ def main(argv: list[str] | None = None) -> int:
     if agg["unpriced_models"]:
         print(f"unpriced models: {', '.join(agg['unpriced_models'])}; costs above exclude them")
     print()
+    if a.svg:
+        from agentcost.chart import waste_chart
+
+        a.svg.write_text(waste_chart(runs))
+        print(f"wrote {a.svg}", file=sys.stderr)
+    if a.ccusage_json:
+        _reconcile(runs, a.ccusage_json)
     top = sorted((r for r in runs if r.totals()["calls"] > 0), key=lambda r: r.totals()["cost_usd"], reverse=True)[: a.top]
     print(f"top {len(top)} sessions by cost:")
     for r in top:
